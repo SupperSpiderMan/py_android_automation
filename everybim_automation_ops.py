@@ -294,6 +294,6 @@ def parser_config():
 
 if __name__ == '__main__':
     option = parser_config()
-    global_action_id = option.action
     flush_out(option)
+    global_action_id = option.action
     main(option)
