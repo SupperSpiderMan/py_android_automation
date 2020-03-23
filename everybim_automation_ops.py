@@ -53,6 +53,7 @@ def main(option):
     config = oem_config(json.loads(option.config))
     try:
         update_ops_status('开始打包')
+        clear_env()
         resolve_svg(config.app_logo_address, config.splash_logo_address)
         has_base = check_base_apk()
         if has_base:
@@ -76,7 +77,6 @@ def main(option):
 
 
 def compile_source(name, version_name, server_address, package_id):
-    clear_env()
     replace_source_configs(name, version_name, server_address)
     replace_source_pics()
     prepare_source_env()
@@ -96,6 +96,8 @@ def clear_env():
     execute('rm -rf logo')
     execute('rm -rf splash')
     execute('rm -r build_source_log.txt')
+    execute('rm -rf apk')
+    execute('rm -rf env')
     flush_out('清理编译环境完成')
 
 
@@ -142,7 +144,7 @@ def compile_source_code(name):
 
 def prepare_source_env():
     flush_out('准备编译环境')
-    execute('gradle wrapper -q')
+    execute('gradle wrapper > env.txt 2>&1')
     flush_out('编译环境准备完成')
 
 
