@@ -88,17 +88,19 @@ def compile_source(name, version_name, server_address, package_id):
 def clear_env():
     # 清理环境
     # 移除所有build文件夹
-    flush_out('清理编译环境')
-    execute('find . -name "build" | xargs rm -rf')
-    execute('find . -name ".hprof" | xargs rm -r')
-    execute('rm -r logo.svg')
-    execute('rm -r splash.svg')
-    execute('rm -rf logo')
-    execute('rm -rf splash')
-    execute('rm -r build_source_log.txt')
-    execute('rm -rf apk')
-    execute('rm -rf env')
-    flush_out('清理编译环境完成')
+    try:
+        flush_out('清理编译环境')
+        execute('find . -name "build" | xargs rm -rf')
+        execute('find . -name ".hprof" | xargs rm -r')
+        execute('rm -rf logo.svg')
+        execute('rm -rf splash.svg')
+        execute('rm -rf logo')
+        execute('rm -rf splash')
+        execute('rm -rf build_source_log.txt')
+        execute('rm -rf apk')
+        execute('rm -rf env')
+    finally:
+        flush_out('清理编译环境完成')
 
 
 def upload_to_server(file_path, package_id):
