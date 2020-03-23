@@ -344,6 +344,8 @@ def parser_config():
 
 if __name__ == '__main__':
     option = parser_config()
+    reload(sys)
+    sys.setdefaultencoding('utf8')
     flush_out(option)
     global_action_id = option.action
     main(option)
