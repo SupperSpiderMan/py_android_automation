@@ -32,7 +32,7 @@ class oem_config:
         else:
             self.server_address = "https://cloud.everybim.net"
 
-        if 'package_id' in config and len(config['packageId']) > 0:
+        if 'packageId' in config and len(config['packageId']) > 0:
             self.package_id = config['packageId']
         else:
             self.package_id = ''
@@ -69,6 +69,7 @@ def main(option):
         os.system("git checkout .")
 
     if global_result > 0:
+        update_ops_status("编译成功")
         flush_out("打包失败")
         exit(1)
     else:
