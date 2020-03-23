@@ -69,10 +69,10 @@ def main(option):
         os.system("git checkout .")
 
     if global_result > 0:
-        update_ops_status("编译成功")
         flush_out("打包失败")
         exit(1)
     else:
+        update_ops_status("编译成功")
         flush_out("打包成功")
         exit(0)
 
@@ -98,6 +98,7 @@ def clear_env():
         execute('rm -rf logo')
         execute('rm -rf splash')
         execute('rm -rf build_source_log.txt')
+        execute('rm -rf env.txt')
         execute('rm -rf apk')
         execute('rm -rf env')
     finally:
