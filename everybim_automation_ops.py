@@ -22,27 +22,27 @@ class oem_config:
         else:
             self.name = 'EveryBIM'
 
-        if 'versionName' in config and len(config['versionName']) > 0:
-            self.version_name = config['versionName']
-        else:
-            self.version_name = ''
+        # if 'versionName' in config and len(config['versionName']) > 0:
+        #     self.version_name = config['versionName']
+        # else:
+        #     self.version_name = ''
 
         if 'serverAddress' in config and len(config['serverAddress']) > 0:
             self.server_address = config['serverAddress']
         else:
             self.server_address = "https://cloud.everybim.net"
 
-        if 'applicationId' in config and len(config['applicationId']) > 0:
-            self.applicationId = config['applicationId']
+        if 'package_id' in config and len(config['packageId']) > 0:
+            self.package_id = config['packageId']
         else:
-            self.applicationId = ''
+            self.package_id = ''
 
         if 'logoAddress' in config and len(config['logoAddress']) > 0:
             self.app_logo_address = config['logoAddress']
         else:
             self.app_logo_address = ''
 
-        if 'splashAddress' in config and len(config['splashAddress']) == 2:
+        if 'splashAddress' in config and len(config['splashAddress']) > 0:
             self.splash_logo_address = config['splashAddress']
         else:
             self.splash_logo_address = ''
@@ -58,12 +58,11 @@ def main(option):
         if has_base:
             return
         else:
-            compile_source(config.name, config.version_name, config.server_address)
-            return
+            compile_source(config.name, option.version, config.server_address, config.package_id)
 
     except Exception as e:
-        flush_out(e)
         update_ops_status("编译失败: " + str(e))
+        flush_out(e)
     finally:
         # 放弃所有本地修改
         os.system("git checkout .")
@@ -76,23 +75,69 @@ def main(option):
         exit(0)
 
 
-def compile_source(name, version_name, server_address):
+def compile_source(name, version_name, server_address, package_id):
+    clear_env()
     replace_source_configs(name, version_name, server_address)
     replace_source_pics()
     prepare_source_env()
     compile_source_code(name)
+    upload_to_server('./apk', package_id)
     return
 
 
+def clear_env():
+    # 清理环境
+    # 移除所有build文件夹
+    flush_out('清理编译环境')
+    execute('find . -name "build" | xargs rm -rf')
+    execute('find . -name ".hprof" | xargs rm -r')
+    execute('rm -r logo.svg')
+    execute('rm -r splash.svg')
+    execute('rm -rf logo')
+    execute('rm -rf splash')
+    execute('rm -r build_source_log.txt')
+    flush_out('清理编译环境完成')
+
+
+def upload_to_server(file_path, package_id):
+    if len(package_id) > 5:
+        flush_out('准备上传包管理平台 约3-5分钟')
+        update_ops_status('安装包上传(3-5分钟)')
+        upload_address = "https://console.ezbim.net/api/files"
+        application_address = "https://console.ezbim.net/api/applications"
+        if os.path.isdir(file_path):
+            for item in os.listdir(file_path):
+                file = {'file': open(os.path.join(file_path, item), 'rb')}
+                result = requests.post(upload_address, files=file)
+                json_result = json.loads(result.text)
+                if "file" in json_result.keys():
+                    data = {'fileId': json_result['file'],
+                            'device': 'android',
+                            'forced': 'false',
+                            "installPackageId": package_id}
+                    result = requests.post(application_address, data=data)
+                    json_result = json.loads(result.text)
+                    if "_id" in json_result.keys():
+                        flush_out(
+                            "上传成功 : https://console.ezbim.net/packages?id=" + json_result['_id'])
+                    else:
+                        flush_out("上传包管理平台失败")
+    else:
+        flush_out('跳过上传包管理平台')
+
+
 def compile_source_code(name):
+    flush_out('开始全量编译打包 约10-15分钟')
+    update_ops_status('全量编译(10-15分钟)')
     cscec_chanel = 'C8BIM'
     if cscec_chanel == name:
         chanel = 'cscec'
     else:
         chanel = 'everybim'
     execute('gradle' + ' assemble' + chanel.capitalize() + 'Release' +
-            ' -q' + ' > build_source_log.txt')
-    flush_out('打包完成')
+            ' > build_source_log.txt 2>&1')
+    flush_out('全量编译打包完成')
+    update_ops_status('编译完成等待上传')
 
 
 def prepare_source_env():
@@ -154,8 +199,8 @@ def replace_pic(source, target):
 def replace_source_configs(name, version_name, server_address):
     global global_result
     flush_out('开始替换APP配置项完毕')
-    version_name_pattern = "(?<=versionName\\s+:\\s+\").*?(?=,)"
-    application_name_pattern = "(?<=applicationName\\s*:\\s*\").*?(?=,)"
+    version_name_pattern = "(?<=versionName\\s+:\\s+\").*?(?=\")"
+    application_name_pattern = "(?<=applicationName\\s*:\\s*\").*?(?=\")"
     server_address_pattern = "(?<=serverAddress\\s*:\\s*\").*?(?=\")"
     root_dir = os.getcwd()
     config_path = os.path.join(root_dir, "app.gradle")
@@ -207,9 +252,9 @@ def resolve_svg(app_logo_address, splash_logo_address):
         configs = [
             svg_config('logo' + os.sep + 'mipmap-mdpi', 'ic_launcher_logo', '100%'),
             svg_config('logo' + os.sep + 'mipmap-hdpi', 'ic_launcher_logo', '150%'),
-            svg_config('logo' + os.sep + 'mipmap-xdpi', 'ic_launcher_logo', '200%'),
-            svg_config('logo' + os.sep + 'mipmap-xxdpi', 'ic_launcher_logo', '300%'),
-            svg_config('logo' + os.sep + 'mipmap-xxxdpi', 'ic_launcher_logo', '400%')]
+            svg_config('logo' + os.sep + 'mipmap-xhdpi', 'ic_launcher_logo', '200%'),
+            svg_config('logo' + os.sep + 'mipmap-xxhdpi', 'ic_launcher_logo', '300%'),
+            svg_config('logo' + os.sep + 'mipmap-xxxhdpi', 'ic_launcher_logo', '400%')]
         for item in configs:
             svg_resize('logo.svg', item)
         flush_out('APP图标裁剪完成')
@@ -222,9 +267,9 @@ def resolve_svg(app_logo_address, splash_logo_address):
         configs = [
             svg_config('splash' + os.sep + 'drawable-mdpi', 'ic_launcher_logo', '100%'),
             svg_config('splash' + os.sep + 'drawable-hdpi', 'ic_launcher_logo', '150%'),
-            svg_config('splash' + os.sep + 'drawable-xdpi', 'ic_launcher_logo', '200%'),
-            svg_config('splash' + os.sep + 'drawable-xxdpi', 'ic_launcher_logo', '300%'),
-            svg_config('splash' + os.sep + 'drawable-xxxdpi', 'ic_launcher_logo', '400%')]
+            svg_config('splash' + os.sep + 'drawable-xhdpi', 'ic_launcher_logo', '200%'),
+            svg_config('splash' + os.sep + 'drawable-xxhdpi', 'ic_launcher_logo', '300%'),
+            svg_config('splash' + os.sep + 'drawable-xxxhdpi', 'ic_launcher_logo', '400%')]
         for item in configs:
             svg_resize('splash.svg', item)
         flush_out('启动页图标裁剪完成')
@@ -268,7 +313,7 @@ def update_ops_status(status):
         return
     update_url = "https://console.ezbim.net/api/automation/ios/actions/" + global_action_id
     params = {"status": status}
-    #requests.put(update_url, json=params)
+    requests.put(update_url, json=params)
 
 
 def flush_out(args):
@@ -288,7 +333,7 @@ def parser_config():
     parser.add_option("-v", "--version",
                       type="string",
                       metavar="version")
-    (option) = parser.parse_args()
+    (option, _) = parser.parse_args()
     return option
 
 
