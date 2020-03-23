@@ -92,7 +92,7 @@ def clear_env():
     try:
         flush_out('清理编译环境')
         execute('find . -name "build" | xargs rm -rf')
-        execute('find . -name ".hprof" | xargs rm -r')
+        execute('find . -name "*.hprof" | xargs rm -r')
         execute('rm -rf logo.svg')
         execute('rm -rf splash.svg')
         execute('rm -rf logo')
