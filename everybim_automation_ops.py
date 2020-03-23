@@ -311,7 +311,7 @@ def update_ops_status(status):
     global global_action_id
     if global_action_id == "":
         return
-    update_url = "https://console.ezbim.net/api/automation/ios/actions/" + global_action_id
+    update_url = "https://console.ezbim.net/api/automation/android/actions/" + global_action_id
     params = {"status": status}
     requests.put(update_url, json=params)
 
