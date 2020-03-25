@@ -55,9 +55,9 @@ def main(option):
         update_ops_status('开始打包')
         clear_env()
         resolve_svg(config.app_logo_address, config.splash_logo_address)
-        has_base = check_base_apk()
+        has_base = check_base_apk(option.version)
         if has_base:
-            return
+            compile_base(config.name, option.version, config.server_address, config.package_id)
         else:
             compile_source(config.name, option.version, config.server_address, config.package_id)
 
@@ -77,13 +77,148 @@ def main(option):
         exit(0)
 
 
+def compile_base(name, version_name, server_address, package_id):
+    prepare_base_env()
+    unpack_base_apk()
+    replace_base_configs(name, version_name, server_address)
+    replace_base_pics()
+    compile_base_code()
+    upload_to_server('./sign.apk', package_id)
+
+
+def compile_base_code():
+    flush_out('开始增量编译打包 约1-3分钟')
+    update_ops_status('增量编译(1-3分钟)')
+    flush_out('开始重新编译')
+    execute('apktool b base -o unsign.apk')
+    flush_out('重新编译完成')
+    flush_out('开始重新签名')
+    execute('apksigner sign --ks /jks/ezbim.jks ' +
+            '--ks-key-alias ezbim ' +
+            '--ks-pass pass:ezbim123 ' +
+            '--key-pass pass:ezbim123 ' +
+            '--v2-signing-enabled false ' +
+            '--out sign.apk unsign.apk')
+    flush_out('重新签名完成')
+    flush_out('增量编译打包完成')
+    update_ops_status('编译完成等待上传')
+
+
+def replace_base_configs(name, version_name, server_address):
+    global global_result
+    flush_out('开始替换增量编译APP配置项')
+    application_name_pattern = "(?<=.*android:label=\")\\S*(?=\")"
+    server_address_pattern = "(?<=.*android:name=\"SERVER_ADDRESS\" android:value=\").*(?=\")"
+    version_name_pattern = "(?<=\\s*versionName\\s*:\\s*).*(?=\\s*)"
+
+    root_dir = os.getcwd()
+    manifest_path = os.path.join(root_dir, 'base', 'AndroidManifest.xml')
+    if not os.path.exists(manifest_path):
+        global_result = 1
+        raise RuntimeError('解压Manifest文件丢失')
+
+    manifest_file = open(manifest_path, "r+")
+    manifest_txt = manifest_file.read()
+    if len(name) > 0:
+        application_name_pattern = re.compile(application_name_pattern)
+        if len(application_name_pattern.findall(manifest_txt)) == 0:
+            flush_out('跳过APP名称替换')
+        else:
+            manifest_txt = application_name_pattern.sub(name, manifest_txt)
+            flush_out('完成APP名称替换')
+    else:
+        flush_out('跳过APP名称替换')
+
+    if len(server_address_pattern) > 0:
+        server_address_pattern = re.compile(server_address_pattern)
+        if len(server_address_pattern.findall(manifest_txt)) == 0:
+            flush_out('跳过APP服务器地址替换')
+        else:
+            manifest_txt = server_address_pattern.sub(server_address, manifest_txt)
+            flush_out('完成APP服务器地址替换')
+    else:
+        flush_out('跳过APP服务器地址替换')
+
+    manifest_file.seek(0)  # 移动文件指针
+    manifest_file.truncate()  # 同时清除文件内容
+    manifest_file.write(manifest_txt)  # 将新的配置文件写入
+    manifest_file.close()
+
+    apktool_path = os.path.join(root_dir, 'base', 'apktool.yml')
+    if not os.path.exists(manifest_path):
+        global_result = 1
+        raise RuntimeError('解压Apktool文件丢失')
+
+    apktool_file = open(apktool_path, "r+")
+    apktool_txt = apktool_file.read()
+    if len(version_name) > 0:
+        version_name_pattern = re.compile(version_name_pattern)
+        if len(version_name_pattern.findall(apktool_txt)) == 0:
+            flush_out('跳过APP版本名称替换')
+        else:
+            apktool_txt = version_name_pattern.sub(version_name, apktool_txt)
+            flush_out('完成APP版本名称替换')
+    else:
+        flush_out('跳过APP版本名称替换')
+
+    apktool_file.seek(0)  # 移动文件指针
+    apktool_file.truncate()  # 同时清除文件内容
+    apktool_file.write(apktool_txt)  # 将新的配置文件写入
+    apktool_file.close()
+    flush_out('替换增量编译APP配置项完成')
+
+
+def replace_base_pics():
+    flush_out('开始替换增量编译LOGO文件')
+    root_dir = os.getcwd()
+    logo_path = os.path.join(root_dir, "logo")
+    resource_path = os.path.join(
+        root_dir,
+        'res'
+    )
+    if os.path.isdir(logo_path):
+        flush_out('开始替换图标LOGO文件')
+        replace_res_files(logo_path, resource_path)
+        flush_out('替换图标LOGO文件完成')
+    else:
+        flush_out('跳过图标LOGO文件替换')
+
+    splash_path = os.path.join(root_dir, "splash")
+    if os.path.isdir(splash_path):
+        flush_out('开始替换启动页LOGO文件')
+        replace_res_files(splash_path, resource_path)
+        flush_out('替换启动页LOGO文件完成')
+    else:
+        flush_out('跳过启动页LOGO文件替换')
+
+    flush_out('增量编译LOGO文件替换完成')
+
+
+def unpack_base_apk():
+    flush_out('开始解压基准包')
+    update_ops_status('开始解包')
+    execute('apktool d base.apk')
+    flush_out('解压基准包完成')
+    update_ops_status('解包完成')
+
+
+def prepare_base_env():
+    flush_out('准备增量编译环境')
+    if not os.path.exists('./build_base'):
+        os.makedirs('./build_base')
+    base_path = base_apk_path()
+    copy_file(base_path, os.path.join('./build_base', 'base.apk'))
+    execute('cd ./build_base')
+    flush_out('增量编译环境准备完成')
+
+
 def compile_source(name, version_name, server_address, package_id):
+    prepare_source_env()
     replace_source_configs(name, version_name, server_address)
     replace_source_pics()
-    prepare_source_env()
     compile_source_code(name)
     upload_to_server('./apk', package_id)
-    return
+    copy_base_apk('./apk')
 
 
 def clear_env():
@@ -96,37 +231,60 @@ def clear_env():
     execute('rm -rf splash.svg')
     execute('rm -rf logo')
     execute('rm -rf splash')
-    execute('rm -rf build_source_log.txt')
     execute('rm -rf env.txt')
     execute('rm -rf apk')
     execute('rm -rf env')
+    execute('rm -rf build_log.txt')
+
+
+def copy_base_apk(path):
+    if os.path.isdir(path):
+        for item in os.listdir(path):
+            if not item.__contains__('C8BIM'):
+                _path = redirect_path(path, item)
+                version_name = execute_result(
+                    "aapt dump badging " + _path +
+                    "|grep -o versionName='\\S*' |grep -o '\\d.*\\d\'")
+                version_code = execute_result(
+                    "aapt dump badging " + _path +
+                    "|grep -o versionCode='\\S*' |grep -o '\\d'")
+                if len(version_name) > 0 and len(version_code) > 0:
+                    source = os.path.join(path, item)
+                    copy_name = version_name + '_' + version_code
+                    copy_file(source, os.path.join('../build_releases', copy_name))
 
 
 def upload_to_server(file_path, package_id):
     if len(package_id) > 5:
         flush_out('准备上传包管理平台 约3-5分钟')
         update_ops_status('安装包上传(3-5分钟)')
-        upload_address = "https://console.ezbim.net/api/files"
-        application_address = "https://console.ezbim.net/api/applications"
         if os.path.isdir(file_path):
             for item in os.listdir(file_path):
-                file = {'file': open(os.path.join(file_path, item), 'rb')}
-                result = requests.post(upload_address, files=file)
-                json_result = json.loads(result.text)
-                if "file" in json_result.keys():
-                    data = {'fileId': json_result['file'],
-                            'device': 'android',
-                            'forced': 'false',
-                            "installPackageId": package_id}
-                    result = requests.post(application_address, data=data)
-                    json_result = json.loads(result.text)
-                    if "_id" in json_result.keys():
-                        flush_out(
-                            "上传成功 : https://console.ezbim.net/packages?id=" + json_result['_id'])
-                    else:
-                        flush_out("上传包管理平台失败")
+                upload_apk(os.path.join(file_path, item), package_id)
+        else:
+            upload_apk(file_path, package_id)
     else:
         flush_out('跳过上传包管理平台')
+
+
+def upload_apk(file_path, package_id):
+    upload_address = "https://console.ezbim.net/api/files"
+    application_address = "https://console.ezbim.net/api/applications"
+    file = {'file': open(file_path, 'rb')}
+    result = requests.post(upload_address, files=file)
+    json_result = json.loads(result.text)
+    if "file" in json_result.keys():
+        data = {'fileId': json_result['file'],
+                'device': 'android',
+                'forced': 'false',
+                "installPackageId": package_id}
+        result = requests.post(application_address, data=data)
+        json_result = json.loads(result.text)
+        if "_id" in json_result.keys():
+            flush_out(
+                "上传成功 : https://console.ezbim.net/packages?id=" + json_result['_id'])
+        else:
+            flush_out("上传包管理平台失败")
 
 
 def compile_source_code(name):
@@ -137,16 +295,17 @@ def compile_source_code(name):
         chanel = 'cscec'
     else:
         chanel = 'everybim'
-    execute('gradle' + ' assemble' + chanel.capitalize() + 'Release' +
-            ' > build_source_log.txt 2>&1')
+    execute('gradle' + ' assemble' + chanel.capitalize())
     flush_out('全量编译打包完成')
     update_ops_status('编译完成等待上传')
 
 
 def prepare_source_env():
-    flush_out('准备编译环境')
-    execute('gradle wrapper > env.txt 2>&1')
-    flush_out('编译环境准备完成')
+    flush_out('准备全量编译环境')
+    # execute('gradle wrapper')
+    if not os.path.exists('../build_releases'):
+        os.makedirs('../build_releases')
+    flush_out('全量编译环境准备完成')
 
 
 def replace_source_pics():
@@ -162,13 +321,7 @@ def replace_source_pics():
     )
     if os.path.isdir(logo_path):
         flush_out('开始替换图标LOGO文件')
-        for child in os.listdir(logo_path):
-            if os.path.isdir(os.path.join(logo_path, child)):
-                for item in os.listdir(os.path.join(logo_path, child)):
-                    make_dir(os.path.join(resource_path, child))
-                    flush_out('替换 ' + child + " " + item + ' 文件')
-                    replace_pic(os.path.join(logo_path, child, item),
-                                os.path.join(resource_path, child, item))
+        replace_res_files(logo_path, resource_path)
         flush_out('替换图标LOGO文件完成')
     else:
         flush_out('跳过图标LOGO文件替换')
@@ -176,32 +329,31 @@ def replace_source_pics():
     splash_path = os.path.join(root_dir, "splash")
     if os.path.isdir(splash_path):
         flush_out('开始替换启动页LOGO文件')
-        for child in os.listdir(splash_path):
-            if os.path.isdir(os.path.join(splash_path, child)):
-                for item in os.listdir(os.path.join(splash_path, child)):
-                    make_dir(os.path.join(resource_path, child))
-                    flush_out('替换 ' + child + " " + item + ' 文件')
-                    replace_pic(os.path.join(splash_path, child, item),
-                                os.path.join(resource_path, child, item))
+        replace_res_files(splash_path, resource_path)
         flush_out('替换启动页LOGO文件完成')
     else:
         flush_out('跳过启动页LOGO文件替换')
 
     flush_out('全量编译LOGO文件替换完成')
 
-    if os.path.exists(logo_path):
-        shutil.rmtree(logo_path)
-    if os.path.exists(splash_path):
-        shutil.rmtree(splash_path)
+
+def replace_res_files(source, resource_path):
+    for child in os.listdir(source):
+        if os.path.isdir(os.path.join(source, child)):
+            for item in os.listdir(os.path.join(source, child)):
+                make_dir(os.path.join(resource_path, child))
+                flush_out('替换 ' + child + " " + item + ' 文件')
+                copy_file(os.path.join(source, child, item),
+                          os.path.join(resource_path, child, item))
 
 
-def replace_pic(source, target):
+def copy_file(source, target):
     shutil.copyfile(source, target)
 
 
 def replace_source_configs(name, version_name, server_address):
     global global_result
-    flush_out('开始替换APP配置项完毕')
+    flush_out('开始替换全量编译APP配置项')
     version_name_pattern = "(?<=versionName\\s+:\\s+\").*?(?=\")"
     application_name_pattern = "(?<=applicationName\\s*:\\s*\").*?(?=\")"
     server_address_pattern = "(?<=serverAddress\\s*:\\s*\").*?(?=\")"
@@ -212,7 +364,7 @@ def replace_source_configs(name, version_name, server_address):
         raise RuntimeError('APP配置文件丢失，请添加配置文件')
     config_file = open(config_path, "r+")
     config_txt = config_file.read()
-    if len(name) > 0:
+    if len(version_name) > 0:
         version_name_pattern = re.compile(version_name_pattern)
         if len(version_name_pattern.findall(config_txt)) == 0:
             flush_out('跳过APP版本名称替换')
@@ -221,7 +373,7 @@ def replace_source_configs(name, version_name, server_address):
             flush_out('完成APP版本名称替换')
     else:
         flush_out('跳过APP版本名称替换')
-    if len(version_name) > 0:
+    if len(name) > 0:
         application_name_pattern = re.compile(application_name_pattern)
         if len(application_name_pattern.findall(config_txt)) == 0:
             flush_out('跳过APP名称替换')
@@ -244,14 +396,14 @@ def replace_source_configs(name, version_name, server_address):
     config_file.truncate()  # 同时清除文件内容
     config_file.write(config_txt)  # 将新的配置文件写入
     config_file.close()
-    flush_out('替换APP配置项完毕')
+    flush_out('替换全量编译APP配置项完毕')
 
 
 def resolve_svg(app_logo_address, splash_logo_address):
     flush_out('开始下载图标文件')
     if len(app_logo_address) > 0:
         flush_out('开始下载APP图标')
-        execute('wget ' + app_logo_address + ' -q' + ' -O logo.svg')
+        execute('wget ' + app_logo_address + ' -O logo.svg')
         configs = [
             svg_config('logo' + os.sep + 'mipmap-mdpi', 'ic_launcher_logo', '100%'),
             svg_config('logo' + os.sep + 'mipmap-hdpi', 'ic_launcher_logo', '150%'),
@@ -266,7 +418,7 @@ def resolve_svg(app_logo_address, splash_logo_address):
 
     if len(splash_logo_address) > 0:
         flush_out('开始下载启动页图标')
-        execute('wget ' + splash_logo_address + ' -q' + ' -O splash.svg')
+        execute('wget ' + splash_logo_address + ' -O splash.svg')
         configs = [
             svg_config('splash' + os.sep + 'drawable-mdpi', 'ic_launcher_logo', '100%'),
             svg_config('splash' + os.sep + 'drawable-hdpi', 'ic_launcher_logo', '150%'),
@@ -293,8 +445,23 @@ def svg_config(dir_name, name, size):
     return {'size': size, 'dir': dir_name, 'name': name}
 
 
-def check_base_apk():
-    return False
+def check_base_apk(version_name):
+    if version_name == 'C8BIM':
+        return False
+    base_path = base_apk_path()
+    if len(base_path) == 0:
+        return False
+    return os.path.exists(base_path)
+
+
+def base_apk_path():
+    version_name = execute_result("cat app.gradle| grep versionName| grep -o '\\d.*\\d\'")
+    version_code = execute_result("cat app.gradle| grep versionName| grep -o '\\d*'")
+    if len(version_name) == 0 or len(version_code) == 0:
+        return ''
+    base_name = version_name + '_' + version_code
+    base_path = os.path.join('../build_releases', base_name)
+    return base_path
 
 
 def make_dir(path):
@@ -304,10 +471,16 @@ def make_dir(path):
 
 def execute(command):
     global global_result
-    result = os.system(command)
+    result = os.system(command + ' > build_log.txt 2>&1')
     if result > 0:
         global_result = result
         raise Exception("执行失败: " + command)
+
+
+def execute_result(command):
+    execute(command)
+    result = os.popen(command)
+    return result.read()
 
 
 def update_ops_status(status):
@@ -338,6 +511,12 @@ def parser_config():
                       metavar="version")
     (option, _) = parser.parse_args()
     return option
+
+
+def redirect_path(path, *paths):
+    _path = os.path.join(path, *paths)
+    _path = _path.replace('(', '\\(').replace(')', '\\)')
+    return _path
 
 
 if __name__ == '__main__':
