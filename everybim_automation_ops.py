@@ -13,6 +13,7 @@ import requests
 
 global_result = 0
 global_action_id = ''
+global_branch = ''
 
 
 class oem_config:
@@ -83,14 +84,14 @@ def compile_base(name, version_name, server_address, package_id):
     replace_base_configs(name, version_name, server_address)
     replace_base_pics()
     compile_base_code()
-    upload_to_server('./sign.apk', package_id)
+    upload_to_server('./build_base/sign.apk', package_id)
 
 
 def compile_base_code():
     flush_out('开始增量编译打包 约1-3分钟')
     update_ops_status('增量编译(1-3分钟)')
     flush_out('开始重新编译')
-    execute('apktool b base -o unsign.apk')
+    execute('apktool b ./build_base/base -o ./build_base/unsign.apk')
     flush_out('重新编译完成')
     flush_out('开始重新签名')
     execute('apksigner sign --ks /jks/ezbim.jks ' +
@@ -98,7 +99,7 @@ def compile_base_code():
             '--ks-pass pass:ezbim123 ' +
             '--key-pass pass:ezbim123 ' +
             '--v2-signing-enabled false ' +
-            '--out sign.apk unsign.apk')
+            '--out ./build_base/sign.apk ./build_base/unsign.apk')
     flush_out('重新签名完成')
     flush_out('增量编译打包完成')
     update_ops_status('编译完成等待上传')
@@ -109,10 +110,10 @@ def replace_base_configs(name, version_name, server_address):
     flush_out('开始替换增量编译APP配置项')
     application_name_pattern = "(?<=.*android:label=\")\\S*(?=\")"
     server_address_pattern = "(?<=.*android:name=\"SERVER_ADDRESS\" android:value=\").*(?=\")"
-    version_name_pattern = "(?<=\\s*versionName\\s*:\\s*).*(?=\\s*)"
+    version_name_pattern = "(?<=\\s*versionName:\\s)[\\d\\.]*(?=\\s*)"
 
     root_dir = os.getcwd()
-    manifest_path = os.path.join(root_dir, 'base', 'AndroidManifest.xml')
+    manifest_path = os.path.join(root_dir, 'build_base', 'base', 'AndroidManifest.xml')
     if not os.path.exists(manifest_path):
         global_result = 1
         raise RuntimeError('解压Manifest文件丢失')
@@ -144,8 +145,8 @@ def replace_base_configs(name, version_name, server_address):
     manifest_file.write(manifest_txt)  # 将新的配置文件写入
     manifest_file.close()
 
-    apktool_path = os.path.join(root_dir, 'base', 'apktool.yml')
-    if not os.path.exists(manifest_path):
+    apktool_path = os.path.join(root_dir, 'build_base', 'base', 'apktool.yml')
+    if not os.path.exists(apktool_path):
         global_result = 1
         raise RuntimeError('解压Apktool文件丢失')
 
@@ -174,6 +175,8 @@ def replace_base_pics():
     logo_path = os.path.join(root_dir, "logo")
     resource_path = os.path.join(
         root_dir,
+        'build_base',
+        'base',
         'res'
     )
     if os.path.isdir(logo_path):
@@ -197,7 +200,7 @@ def replace_base_pics():
 def unpack_base_apk():
     flush_out('开始解压基准包')
     update_ops_status('开始解包')
-    execute('apktool d base.apk')
+    execute('apktool d -f ./build_base/base.apk -o ./build_base/base')
     flush_out('解压基准包完成')
     update_ops_status('解包完成')
 
@@ -235,19 +238,19 @@ def clear_env():
     execute('rm -rf apk')
     execute('rm -rf env')
     execute('rm -rf build_log.txt')
+    execute('rm -rf build_base')
 
 
 def copy_base_apk(path):
+    global global_branch
     if os.path.isdir(path):
         for item in os.listdir(path):
             if not item.__contains__('C8BIM'):
                 _path = redirect_path(path, item)
-                version_name = execute_result(
-                    "aapt dump badging " + _path +
-                    "|grep -o versionName='\\S*' |grep -o '\\d.*\\d\'")
+                version_name = global_branch
                 version_code = execute_result(
                     "aapt dump badging " + _path +
-                    "|grep -o versionCode='\\S*' |grep -o '\\d'")
+                    "|grep -o versionCode='\\S*' |grep -o -E '\\d+'")
                 if len(version_name) > 0 and len(version_code) > 0:
                     source = os.path.join(path, item)
                     copy_name = version_name + '_' + version_code
@@ -288,8 +291,8 @@ def upload_apk(file_path, package_id):
 
 
 def compile_source_code(name):
-    flush_out('开始全量编译打包 约10-15分钟')
-    update_ops_status('全量编译(10-15分钟)')
+    flush_out('开始全量编译打包 约15-25分钟')
+    update_ops_status('全量编译(15-25分钟)')
     cscec_chanel = 'C8BIM'
     if cscec_chanel == name:
         chanel = 'cscec'
@@ -456,7 +459,7 @@ def check_base_apk(version_name):
 
 def base_apk_path():
     version_name = execute_result("cat app.gradle| grep versionName| grep -o '\\d.*\\d\'")
-    version_code = execute_result("cat app.gradle| grep versionName| grep -o '\\d*'")
+    version_code = execute_result("cat app.gradle| grep versionCode| grep -o -E '\\d+'")
     if len(version_name) == 0 or len(version_code) == 0:
         return ''
     base_name = version_name + '_' + version_code
@@ -480,7 +483,7 @@ def execute(command):
 def execute_result(command):
     execute(command)
     result = os.popen(command)
-    return result.read()
+    return str(result.read()).strip()
 
 
 def update_ops_status(status):
@@ -509,6 +512,9 @@ def parser_config():
     parser.add_option("-v", "--version",
                       type="string",
                       metavar="version")
+    parser.add_option("-b", "--branch",
+                      type="string",
+                      metavar="branch")
     (option, _) = parser.parse_args()
     return option
 
@@ -525,4 +531,5 @@ if __name__ == '__main__':
     sys.setdefaultencoding('utf8')
     flush_out(option)
     global_action_id = option.action
+    global_branch = option.branch
     main(option)
