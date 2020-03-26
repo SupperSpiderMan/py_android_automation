@@ -259,8 +259,8 @@ def copy_base_apk(path):
 
 def upload_to_server(file_path, package_id):
     if len(package_id) > 5:
-        flush_out('准备上传包管理平台 约3-5分钟')
-        update_ops_status('安装包上传(3-5分钟)')
+        flush_out('准备上传包管理平台 约1-3分钟')
+        update_ops_status('安装包上传(1-3分钟)')
         if os.path.isdir(file_path):
             for item in os.listdir(file_path):
                 upload_apk(os.path.join(file_path, item), package_id)
