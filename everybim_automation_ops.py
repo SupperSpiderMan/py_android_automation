@@ -408,11 +408,11 @@ def resolve_svg(app_logo_address, splash_logo_address):
         flush_out('开始下载APP图标')
         execute('wget ' + app_logo_address + ' -O logo.svg')
         configs = [
-            svg_config('logo' + os.sep + 'mipmap-mdpi', 'ic_launcher_logo', '100%'),
-            svg_config('logo' + os.sep + 'mipmap-hdpi', 'ic_launcher_logo', '150%'),
-            svg_config('logo' + os.sep + 'mipmap-xhdpi', 'ic_launcher_logo', '200%'),
-            svg_config('logo' + os.sep + 'mipmap-xxhdpi', 'ic_launcher_logo', '300%'),
-            svg_config('logo' + os.sep + 'mipmap-xxxhdpi', 'ic_launcher_logo', '400%')]
+            svg_config('logo' + os.sep + 'mipmap-mdpi', 'ic_launcher_logo', '1.0'),
+            svg_config('logo' + os.sep + 'mipmap-hdpi', 'ic_launcher_logo', '1.5'),
+            svg_config('logo' + os.sep + 'mipmap-xhdpi', 'ic_launcher_logo', '2.0'),
+            svg_config('logo' + os.sep + 'mipmap-xxhdpi', 'ic_launcher_logo', '3.0'),
+            svg_config('logo' + os.sep + 'mipmap-xxxhdpi', 'ic_launcher_logo', '4.0')]
         for item in configs:
             svg_resize('logo.svg', item)
         flush_out('APP图标裁剪完成')
@@ -423,11 +423,11 @@ def resolve_svg(app_logo_address, splash_logo_address):
         flush_out('开始下载启动页图标')
         execute('wget ' + splash_logo_address + ' -O splash.svg')
         configs = [
-            svg_config('splash' + os.sep + 'drawable-mdpi', 'ic_launcher_logo', '100%'),
-            svg_config('splash' + os.sep + 'drawable-hdpi', 'ic_launcher_logo', '150%'),
-            svg_config('splash' + os.sep + 'drawable-xhdpi', 'ic_launcher_logo', '200%'),
-            svg_config('splash' + os.sep + 'drawable-xxhdpi', 'ic_launcher_logo', '300%'),
-            svg_config('splash' + os.sep + 'drawable-xxxhdpi', 'ic_launcher_logo', '400%')]
+            svg_config('splash' + os.sep + 'drawable-mdpi', 'main_splash_logo', '1.0'),
+            svg_config('splash' + os.sep + 'drawable-hdpi', 'main_splash_logo', '1.5'),
+            svg_config('splash' + os.sep + 'drawable-xhdpi', 'main_splash_logo', '2.0'),
+            svg_config('splash' + os.sep + 'drawable-xxhdpi', 'main_splash_logo', '3.0'),
+            svg_config('splash' + os.sep + 'drawable-xxxhdpi', 'main_splash_logo', '4.0')]
         for item in configs:
             svg_resize('splash.svg', item)
         flush_out('启动页图标裁剪完成')
@@ -438,14 +438,14 @@ def resolve_svg(app_logo_address, splash_logo_address):
 
 def svg_resize(svg_path, size_config):
     make_dir(size_config['dir'])
-    execute("/usr/local/bin/convert -density 160" +
-            " -resize " + size_config['size'] +
-            " " + svg_path + " " + size_config['dir'] +
-            os.sep + size_config['name'] + '.png')
+    execute("rsvg-convert -f png -d 320 -p 320" +
+            " -z " + size_config['zoom'] +
+            " -o " + size_config['dir'] +
+            os.sep + size_config['name'] + '.png' + " " + svg_path)
 
 
-def svg_config(dir_name, name, size):
-    return {'size': size, 'dir': dir_name, 'name': name}
+def svg_config(dir_name, name, zoom):
+    return {'zoom': zoom, 'dir': dir_name, 'name': name}
 
 
 def check_base_apk(version_name):
