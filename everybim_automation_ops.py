@@ -10,6 +10,7 @@ from optparse import OptionParser
 
 import regex as re
 import requests
+import platform
 
 global_result = 0
 global_action_id = ''
@@ -63,6 +64,7 @@ def main(option):
             compile_source(config.name, option.version, config.server_address, config.package_id)
 
     except Exception as e:
+        global_result = 1
         update_ops_status("编译失败: " + str(e))
         flush_out(e)
     finally:
@@ -115,7 +117,6 @@ def replace_base_configs(name, version_name, server_address):
     root_dir = os.getcwd()
     manifest_path = os.path.join(root_dir, 'build_base', 'base', 'AndroidManifest.xml')
     if not os.path.exists(manifest_path):
-        global_result = 1
         raise RuntimeError('解压Manifest文件丢失')
 
     manifest_file = open(manifest_path, "r+")
@@ -147,7 +148,6 @@ def replace_base_configs(name, version_name, server_address):
 
     apktool_path = os.path.join(root_dir, 'build_base', 'base', 'apktool.yml')
     if not os.path.exists(apktool_path):
-        global_result = 1
         raise RuntimeError('解压Apktool文件丢失')
 
     apktool_file = open(apktool_path, "r+")
@@ -184,7 +184,9 @@ def replace_base_pics():
         replace_res_files(logo_path, resource_path)
         flush_out('替换图标LOGO文件完成')
     else:
-        flush_out('跳过图标LOGO文件替换')
+        flush_out('开始替换原始图标LOGO文件')
+        replace_original_logo_res(resource_path)
+        flush_out('替换原始图标LOGO文件完成')
 
     splash_path = os.path.join(root_dir, "splash")
     if os.path.isdir(splash_path):
@@ -192,9 +194,55 @@ def replace_base_pics():
         replace_res_files(splash_path, resource_path)
         flush_out('替换启动页LOGO文件完成')
     else:
-        flush_out('跳过启动页LOGO文件替换')
+        flush_out('开始替换原始启动页LOGO文件')
+        replace_original_splash_res(resource_path)
+        flush_out('替换原始启动页LOGO文件完成')
 
     flush_out('增量编译LOGO文件替换完成')
+
+
+def replace_original_logo_res(resource_path):
+    root_dir = os.getcwd()
+    logo_paths = [
+        os.path.join(root_dir, 'app', 'src', 'main', 'res', 'mipmap-hdpi',
+                     'ic_launcher_logo.png'),
+        os.path.join(root_dir, 'app', 'src', 'main', 'res', 'mipmap-mdpi',
+                     'ic_launcher_logo.png'),
+        os.path.join(root_dir, 'app', 'src', 'main', 'res', 'mipmap-xhdpi',
+                     'ic_launcher_logo.png'),
+        os.path.join(root_dir, 'app', 'src', 'main', 'res', 'mipmap-xxhdpi',
+                     'ic_launcher_logo.png'),
+        os.path.join(root_dir, 'app', 'src', 'main', 'res', 'mipmap-xxxhdpi',
+                     'ic_launcher_logo.png')
+    ]
+    logo_path = os.path.join(root_dir, "logo")
+    for path in logo_paths:
+        copy_file(path, logo_path + os.sep +
+                  os.path.basename(os.path.dirname(path)) +
+                  os.sep + os.path.basename(path))
+    replace_res_files(logo_path, resource_path)
+
+
+def replace_original_splash_res(resource_path):
+    root_dir = os.getcwd()
+    splash_paths = [
+        os.path.join(root_dir, 'app', 'src', 'main', 'res', 'drawable-hdpi',
+                     'main_splash_logo.png'),
+        os.path.join(root_dir, 'app', 'src', 'main', 'res', 'drawable-mdpi',
+                     'main_splash_logo.png'),
+        os.path.join(root_dir, 'app', 'src', 'main', 'res', 'drawable-xhdpi',
+                     'main_splash_logo.png'),
+        os.path.join(root_dir, 'app', 'src', 'main', 'res', 'drawable-xxhdpi',
+                     'main_splash_logo.png'),
+        os.path.join(root_dir, 'app', 'src', 'main', 'res', 'drawable-xxxhdpi',
+                     'main_splash_logo.png')
+    ]
+    splash_path = os.path.join(root_dir, "splash")
+    for path in splash_paths:
+        copy_file(path, splash_path + os.sep +
+                  os.path.basename(os.path.dirname(path)) +
+                  os.sep + os.path.basename(path))
+    replace_res_files(splash_path, resource_path)
 
 
 def unpack_base_apk():
@@ -229,15 +277,11 @@ def clear_env():
     # 移除所有build文件夹
     flush_out('清理编译环境')
     execute('rm -rf *.hprof')
-    execute('rm -rf logo.svg')
-    execute('rm -rf splash.svg')
+    execute('rm -rf *.svg')
     execute('rm -rf logo')
     execute('rm -rf splash')
-    execute('rm -rf env.txt')
     execute('rm -rf apk')
-    execute('rm -rf env')
     execute('rm -rf build_log.txt')
-    execute('rm -rf build_base')
 
 
 def copy_base_apk(path):
@@ -247,9 +291,14 @@ def copy_base_apk(path):
             if not item.__contains__('C8BIM'):
                 _path = redirect_path(path, item)
                 version_name = global_branch
-                version_code = execute_result(
-                    "aapt dump badging " + _path +
-                    "|grep -o versionCode='\\S*' |grep -o -E '\\d+'")
+                if is_linux():
+                    version_code = execute_result(
+                        "aapt dump badging " + _path +
+                        "|grep -o -P versionCode='\\S*' |grep -o -P '\\d+'")
+                else:
+                    version_code = execute_result(
+                        "aapt dump badging " + _path +
+                        "|grep -o versionCode='\\S*' |grep -o -E '\\d+'")
                 if len(version_name) > 0 and len(version_code) > 0:
                     source = os.path.join(path, item)
                     copy_name = version_name + '_' + version_code
@@ -326,7 +375,9 @@ def replace_source_pics():
         replace_res_files(logo_path, resource_path)
         flush_out('替换图标LOGO文件完成')
     else:
-        flush_out('跳过图标LOGO文件替换')
+        flush_out('开始替换原始图标LOGO文件')
+        replace_original_logo_res(resource_path)
+        flush_out('替换原始图标LOGO文件完成')
 
     splash_path = os.path.join(root_dir, "splash")
     if os.path.isdir(splash_path):
@@ -334,7 +385,9 @@ def replace_source_pics():
         replace_res_files(splash_path, resource_path)
         flush_out('替换启动页LOGO文件完成')
     else:
-        flush_out('跳过启动页LOGO文件替换')
+        flush_out('开始替换原始启动页LOGO文件')
+        replace_original_splash_res(resource_path)
+        flush_out('替换原始启动页LOGO文件完成')
 
     flush_out('全量编译LOGO文件替换完成')
 
@@ -350,6 +403,7 @@ def replace_res_files(source, resource_path):
 
 
 def copy_file(source, target):
+    make_dir(os.path.dirname(target))
     shutil.copyfile(source, target)
 
 
@@ -459,7 +513,10 @@ def check_base_apk(version_name):
 def base_apk_path():
     global global_branch
     version_name = global_branch
-    version_code = execute_result("cat app.gradle| grep versionCode| grep -o -E '\\d+'")
+    if is_linux():
+        version_code = execute_result("cat app.gradle| grep versionCode| grep -o -P '\\d+'")
+    else:
+        version_code = execute_result("cat app.gradle| grep versionCode| grep -o -E '\\d+'")
     if len(version_name) == 0 or len(version_code) == 0:
         return ''
     base_name = version_name + '_' + version_code
@@ -523,6 +580,10 @@ def redirect_path(path, *paths):
     _path = os.path.join(path, *paths)
     _path = _path.replace('(', '\\(').replace(')', '\\)')
     return _path
+
+
+def is_linux():
+    return platform.system() == 'Linux'
 
 
 if __name__ == '__main__':
