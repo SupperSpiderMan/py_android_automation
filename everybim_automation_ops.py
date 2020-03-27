@@ -228,8 +228,7 @@ def clear_env():
     # 清理环境
     # 移除所有build文件夹
     flush_out('清理编译环境')
-    execute('find . -name "build" | xargs rm -rf')
-    execute('find . -name "*.hprof" | xargs rm -rf')
+    execute('rm -rf *.hprof')
     execute('rm -rf logo.svg')
     execute('rm -rf splash.svg')
     execute('rm -rf logo')
@@ -305,7 +304,7 @@ def compile_source_code(name):
 
 def prepare_source_env():
     flush_out('准备全量编译环境')
-    # execute('gradle wrapper')
+    execute('gradle clean')
     if not os.path.exists('../build_releases'):
         os.makedirs('../build_releases')
     flush_out('全量编译环境准备完成')
@@ -458,7 +457,8 @@ def check_base_apk(version_name):
 
 
 def base_apk_path():
-    version_name = execute_result("cat app.gradle| grep versionName| grep -o '\\d.*\\d\'")
+    global global_branch
+    version_name = global_branch
     version_code = execute_result("cat app.gradle| grep versionCode| grep -o -E '\\d+'")
     if len(version_name) == 0 or len(version_code) == 0:
         return ''
