@@ -375,9 +375,7 @@ def replace_source_pics():
         replace_res_files(logo_path, resource_path)
         flush_out('替换图标LOGO文件完成')
     else:
-        flush_out('开始替换原始图标LOGO文件')
-        replace_original_logo_res(resource_path)
-        flush_out('替换原始图标LOGO文件完成')
+        flush_out('跳过图标LOGO文件替换')
 
     splash_path = os.path.join(root_dir, "splash")
     if os.path.isdir(splash_path):
@@ -385,9 +383,7 @@ def replace_source_pics():
         replace_res_files(splash_path, resource_path)
         flush_out('替换启动页LOGO文件完成')
     else:
-        flush_out('开始替换原始启动页LOGO文件')
-        replace_original_splash_res(resource_path)
-        flush_out('替换原始启动页LOGO文件完成')
+        flush_out('跳过启动页LOGO文件替换')
 
     flush_out('全量编译LOGO文件替换完成')
 
