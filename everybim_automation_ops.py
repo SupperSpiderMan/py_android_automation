@@ -342,7 +342,7 @@ def compile_source_code(name):
     flush_out('开始全量编译打包 约15-25分钟')
     update_ops_status('全量编译(15-25分钟)')
     cscec_chanel = 'C8BIM'
-    if cscec_chanel == name:
+    if name.__contains__(cscec_chanel):
         chanel = 'cscec'
     else:
         chanel = 'everybim'
@@ -498,7 +498,10 @@ def svg_config(dir_name, name, zoom):
 
 
 def check_base_apk(version_name):
-    if version_name == 'C8BIM':
+    global global_branch
+    if version_name.__contains__('C8BIM'):
+        return False
+    if global_branch.__contains__('i18n'):
         return False
     base_path = base_apk_path()
     if len(base_path) == 0:
