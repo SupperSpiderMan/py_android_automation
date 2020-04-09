@@ -281,6 +281,7 @@ def clear_env():
     execute('rm -rf logo')
     execute('rm -rf splash')
     execute('rm -rf apk')
+    execute('rm -rf build_base')
     execute('rm -rf build_log.txt')
 
 
